@@ -1,0 +1,69 @@
+# =====================================
+# BASE IMAGE
+# =====================================
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# =====================================
+# SYSTEM DEPENDENCIES
+# =====================================
+RUN apt-get update && apt-get install -y \
+    curl \
+    libglib2.0-0 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# =====================================
+# ENV
+# =====================================
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV PATH="/root/.local/bin:$PATH"
+
+# =====================================
+# INSTALL DEPENDENCIES
+# =====================================
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# =====================================
+# COPY APP
+# =====================================
+COPY config.py .
+COPY utils.py .
+COPY api.py .
+
+# ✅ FIX: COPY MODEL & DATA
+COPY model/ ./model/
+COPY dataset/ ./dataset/
+
+# =====================================
+# CREATE DIRS
+# =====================================
+RUN mkdir -p output/api_logs output/test_results output/inference output/metrics
+
+# =====================================
+# SECURITY (NON-ROOT)
+# =====================================
+RUN useradd -m appuser
+USER appuser
+
+# =====================================
+# HEALTHCHECK
+# =====================================
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# =====================================
+# PORT
+# =====================================
+EXPOSE 8000
+
+# =====================================
+# RUN
+# =====================================
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Cache pip
+RUN pip install --no-cache-dir --upgrade pip

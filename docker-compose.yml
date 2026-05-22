@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # =====================================
+  # FASTAPI BACKEND
+  # =====================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/app/output
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    command: python -m uvicorn api:app --host 0.0.0.0 --port 8000
+
+  # =====================================
+  # STREAMLIT FRONTEND
+  # =====================================
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ENABLEXSRFPROTECTION=false
+    restart: unless-stopped
+    command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+
+volumes:
+  model_cache:
+    driver: local

@@ -1,0 +1,62 @@
+# Build stage
+FROM python:3.9-slim as builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libopencv-dev \
+    python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+
+# Runtime stage
+FROM python:3.9-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    libopencv-core4.5 \
+    libopencv-imgproc4.5 \
+    libopencv-highgui4.5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependencies
+COPY --from=builder /root/.local /root/.local
+
+ENV PATH=/root/.local/bin:$PATH
+ENV PYTHONPATH=/app:$PYTHONPATH
+ENV PYTHONUNBUFFERED=1
+
+# Copy app files
+COPY config.py .
+COPY utils.py .
+COPY streamlit_app.py .
+
+# ✅ FIX: copy model & dataset
+COPY model/ ./model/
+COPY dataset/ ./dataset/
+
+# Streamlit config
+RUN mkdir -p ~/.streamlit && \
+    echo "[server]\n\
+headless = true\n\
+port = 8501\n\
+enableXsrfProtection = false\n\
+enableCORS = false\n\
+[logger]\n\
+level = info" > ~/.streamlit/config.toml
+
+# ✅ FIX: better healthcheck (port check)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',8501)); s.close()" || exit 1
+
+EXPOSE 8501
+
+CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Cache pip
+RUN pip install --no-cache-dir --upgrade pip
